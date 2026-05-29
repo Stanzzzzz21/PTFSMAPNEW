@@ -1,5 +1,4 @@
 // api/map-state.js
-const WebSocket = require('ws');
 
 // --- COMPLETE PTFS / ATC24 MAP AIRFIELD DATA ---
 const AIRPORTS = {
@@ -25,23 +24,34 @@ const AIRPORTS = {
     "CVN78": { name: "USS Gerald R. Ford", x: 28000, y: -40000 }
 };
 
-module.exports = async function handler(req, res) {
-    // Set headers to allow cross-origin fetching securely
+export default async function handler(req, res) {
+    // Enable clean global layout cross-origin permissions
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET');
     res.setHeader('Content-Type', 'application/json');
 
     try {
-        // Fetch a fresh batch of tracking coordinates directly on request
-        const rawLiveAircraft = await fetchLatestDataGridFrame();
+        // Drop the faulty WS stream logic. Fetch directly from the 24data REST API stream link
+        const upstreamResponse = await fetch('https://24data.ptfs.app/api/map-state', {
+            headers: { 'User-Agent': 'Mozilla/5.0' }
+        });
 
-        const planes = Object.entries(rawLiveAircraft).map(([callsign, data]) => {
+        if (!upstreamResponse.ok) {
+            throw new Error(`Upstream network replied with status: ${upstreamResponse.status}`);
+        }
+
+        const rawData = await upstreamResponse.json();
+        
+        // Extract the aircraft matrix safely from the incoming frame object
+        const liveAircraft = rawData.planes || rawData.d || {};
+
+        const planes = Object.entries(liveAircraft).map(([callsign, data]) => {
             if (!data || !data.position) return null;
             
             let closestAirport = "None";
             let minDistance = Infinity;
 
-            // Vector tracking distance matrix logic
+            // Compute spatial distance vectors across the tracking grid array
             for (const [icao, coord] of Object.entries(AIRPORTS)) {
                 const dx = data.position.x - coord.x;
                 const dy = data.position.y - coord.y;
@@ -54,55 +64,22 @@ module.exports = async function handler(req, res) {
 
             return {
                 callsign: callsign,
-                aircraft: data.aircraftType || 'UNK',
+                aircraft: data.aircraftType || data.aircraft || 'UNK',
                 x: data.position.x,
                 y: data.position.y,
                 altitude: data.altitude || 0,
                 heading: data.heading || 0,
                 groundSpeed: data.groundSpeed ? Math.round(data.groundSpeed) : 0,
-                emergency: data.isEmergencyOccuring || false,
+                emergency: data.isEmergencyOccuring || data.emergency || false,
                 closestAirport: closestAirport
             };
-        }).filter(Boolean); // Clean up empty items
+        }).filter(Boolean);
 
+        // Send perfectly compiled, non-crashing data layout to your app.js frontend
         res.status(200).json({ airports: AIRPORTS, planes: planes });
 
     } catch (error) {
-        // Fallback grid configuration if the upstream socket network times out
-        res.status(500).json({ airports: AIRPORTS, planes: [], error: error.message });
+        // Fallback safety route matrix to keep the screen drawing even if the upstream connection drops
+        res.status(200).json({ airports: AIRPORTS, planes: [], error: error.message });
     }
-};
-
-// Opens a rapid fetch connection to resolve a single data frame instantly
-function fetchLatestDataGridFrame() {
-    return new Promise((resolve, reject) => {
-        const ws = new WebSocket('wss://24data.ptfs.app/wss', {
-            headers: { 'Origin': '' }
-        });
-
-        // Fail-safe timeout: don't let Vercel hang for more than 4 seconds
-        const failSafeTimeout = setTimeout(() => {
-            ws.terminate();
-            reject(new Error('Upstream tracking data grid timeout.'));
-        }, 4000);
-
-        ws.on('message', (rawData) => {
-            try {
-                const packet = JSON.parse(rawData);
-                if (packet.t === 'ACFT_DATA' && packet.d) {
-                    clearTimeout(failSafeTimeout);
-                    ws.terminate();
-                    resolve(packet.d);
-                }
-            } catch (err) {
-                // Ignore parse errors, wait for next frame
-            }
-        });
-
-        ws.on('error', (err) => {
-            clearTimeout(failSafeTimeout);
-            ws.terminate();
-            reject(err);
-        });
-    });
 }
