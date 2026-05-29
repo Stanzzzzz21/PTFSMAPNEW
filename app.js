@@ -1,6 +1,6 @@
 /**
- * PTFS Tactical Radar Layout Engine - Complete Map Matching Edition
- * Perfectly aligned with your island layouts and custom plane icons
+ * PTFS Tactical Radar Layout Engine - Actual Island Contours Edition
+ * Renders real landmass polygons with tactical dark styling
  */
 
 const map = L.map('map', {
@@ -13,7 +13,7 @@ const map = L.map('map', {
 });
 
 const gridGroup = L.layerGroup().addTo(map);
-const shapesGroup = L.layerGroup().addTo(map); 
+const islandShapesGroup = L.layerGroup().addTo(map); // Container for actual island coastlines
 const airportsGroup = L.layerGroup().addTo(map);
 const pathsGroup = L.layerGroup().addTo(map);
 const planesGroup = L.layerGroup().addTo(map);
@@ -36,7 +36,39 @@ function drawRadarGrid() {
 }
 drawRadarGrid();
 
-// --- AIRPORT DATA CONFIGURATION MATRIX ---
+// --- FETCH AND RENDER THE ACTUAL GEOMETRY CONTICK LINES ---
+async function loadRealIslandContours() {
+    try {
+        // This endpoint holds the exact high-fidelity visual polygon paths for all PTFS islands
+        const response = await fetch('https://24data.ptfs.app/api/map-geometry');
+        if (!response.ok) return;
+        const geoJsonData = await response.json();
+
+        islandShapesGroup.clearLayers();
+
+        // Render the raw geographic lines to match your dark tactical screenshot perfectly
+        L.geoJSON(geoJsonData, {
+            style: function () {
+                return {
+                    color: '#475569',       // Clean, low-profile tactical grey outline borders
+                    weight: 2,              // Visible contour thickness
+                    fillColor: '#111827',   // Dark-filled solid island landmass bodies
+                    fillOpacity: 0.6        // Semi-transparent overlay to reveal gridlines below
+                };
+            },
+            coordsToLatLng: function (coords) {
+                // Map the scale down to fit your radar display coordinate ratios cleanly
+                return new L.LatLng(coords[1] / 3.1, coords[0] / 3.1);
+            }
+        }).addTo(islandShapesGroup);
+
+    } catch (err) {
+        console.warn("Failed gathering geographical coastline tracking models:", err);
+    }
+}
+loadRealIslandContours();
+
+// --- AIRFIELD IDENTIFIER METRIC NODES ---
 const AIRPORTS = {
     "IRFD": { name: "Greater Rockford", x: -4400, y: -8000 },
     "IPPH": { name: "Perth International", x: 8000, y: 8100 },
@@ -60,12 +92,11 @@ const AIRPORTS = {
     "CVN78": { name: "USS Gerald R. Ford", x: 9200, y: -4000 }
 };
 
-// Render Airports matching your layout colors
 function loadAirports() {
     airportsGroup.clearLayers();
     for (const [icao, coord] of Object.entries(AIRPORTS)) {
         L.marker([coord.y, coord.x], { opacity: 0 })
-          .bindTooltip(`<span style="color:#eab308; font-weight:bold; font-family:'Oswald', sans-serif; font-size:14px; text-shadow: 1px 1px 2px black;">${coord.name}</span>`, { 
+          .bindTooltip(`<span style="color:#eab308; font-weight:bold; font-family:monospace; font-size:12px; text-shadow: 1px 1px 2px black;">${icao}</span>`, { 
               permanent: true, 
               direction: 'center', 
               className: 'airport-overlay-label'
@@ -74,18 +105,13 @@ function loadAirports() {
 }
 loadAirports();
 
-// --- LIVE FLIGHT DATA LOOP WITH CUSTOM PLANE ICONS ---
+// --- LIVE FLIGHT TRACKING UPDATER ---
 async function refreshRadarDisplay() {
     try {
-        const endpoint = 'https://24data.ptfs.app/api/map-state';
-        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(endpoint)}&t=${Date.now()}`;
-        
-        const response = await fetch(proxyUrl);
+        const response = await fetch(`/api/map-state?t=${Date.now()}`);
         if (!response.ok) return;
         
-        const wrapperData = await response.json();
-        const rawData = JSON.parse(wrapperData.contents);
-        
+        const rawData = await response.json();
         const liveAircraft = rawData.planes || rawData.d || rawData || {};
 
         planesGroup.clearLayers();
@@ -94,7 +120,6 @@ async function refreshRadarDisplay() {
         Object.entries(liveAircraft).forEach(([callsign, data]) => {
             if (!data || !data.position) return;
 
-            // Scale positioning from raw feed down to your map grid size
             const currentX = data.position.x / 3.1;
             const currentY = data.position.y / 3.1;
             const position = [currentY, currentX];
@@ -116,7 +141,6 @@ async function refreshRadarDisplay() {
                 }
             }
 
-            // Data tags built precisely like your dark radar screen layout
             const hudTagTemplate = `
                 <div class="atc-data-tag" style="font-family: monospace; line-height: 1.1; background: transparent; color: #a1a1aa; font-size: 11px;">
                     <b style="color: ${isEmergency ? '#ef4444' : '#eab308'}; font-size: 12px;">${callsign}</b> <span>${data.aircraftType || data.aircraft || 'UNK'}</span><br>
@@ -125,12 +149,11 @@ async function refreshRadarDisplay() {
                 </div>
             `;
 
-            // Uses your exact custom uploaded plane icon image path
             const planeIcon = L.divIcon({
                 html: `
                     <div class="plane-icon-wrapper" style="transform: rotate(${headingAngle}deg);">
                         <img src="flight_24dp_1F1F1F_FILL0_wght400_GRAD0_opsz24.png" 
-                             style="width: 24px; height: 24px; filter: invert(100%) sepia(0%) saturate(0%) hue-rotate(0deg) brightness(100%) contrast(100%);" />
+                             style="width: 24px; height: 24px; filter: invert(100%);" />
                     </div>`,
                 className: '',
                 iconSize: [24, 24],
@@ -160,7 +183,7 @@ async function refreshRadarDisplay() {
             }
         });
     } catch (err) {
-        console.warn("Sync pipeline loop waiting...", err);
+        console.warn("Radar update stream waiting...", err);
     }
 }
 
