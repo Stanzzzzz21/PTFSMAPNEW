@@ -1,19 +1,17 @@
 /**
  * PTFS Tactical Radar Layout Engine - Stable Build
- * Full Error-Resilient Edition
+ * Absolute Path & Viewport Lock Edition
  */
 
-// 1. Initialize Flat X/Y Tracking Canvas
 const map = L.map('map', {
     crs: L.CRS.Simple,
-    minZoom: -4,
-    maxZoom: 2,
+    minZoom: -5,
+    maxZoom: 3,
     zoom: -2,
     center: [0, 0],
     attributionControl: false
 });
 
-// 2. Setup Isolated Rendering Layers
 const gridGroup = L.layerGroup().addTo(map);
 const airportsGroup = L.layerGroup().addTo(map);
 const pathsGroup = L.layerGroup().addTo(map);
@@ -22,30 +20,33 @@ const planesGroup = L.layerGroup().addTo(map);
 
 let airportsLoaded = false;
 
-// 3. Render Permanent Tactical Background Grid Matrix
+// Force a visual checkpoint line so we know the map canvas is awake
 function drawRadarGrid() {
     gridGroup.clearLayers();
     const gridSpacing = 500;
     const gridRange = 10000;
 
+    // Outer radar boundary ring
+    L.circle([0, 0], { radius: 5000, color: '#1e293b', weight: 1, fill: false }).addTo(gridGroup);
+    L.circle([0, 0], { radius: 2500, color: '#1e293b', weight: 1, fill: false }).addTo(gridGroup);
+
     for (let x = -gridRange; x <= gridRange; x += gridSpacing) {
         L.polyline([[ -gridRange, x ], [ gridRange, x ]], {
             color: '#1e293b',
             weight: 0.5,
-            opacity: 0.4
+            opacity: 0.3
         }).addTo(gridGroup);
     }
     for (let y = -gridRange; y <= gridRange; y += gridSpacing) {
         L.polyline([[ y, -gridRange ], [ y, gridRange ]], {
             color: '#1e293b',
             weight: 0.5,
-            opacity: 0.4
+            opacity: 0.3
         }).addTo(gridGroup);
     }
 }
 drawRadarGrid();
 
-// Helper: Safely normalize tracking heading metrics
 function getAircraftHeading(plane) {
     if (plane && plane.heading !== undefined) {
         return parseInt(plane.heading) || 0;
@@ -53,59 +54,49 @@ function getAircraftHeading(plane) {
     return 0;
 }
 
-// 4. Main Data Pipeline Core Logic Loop
 async function refreshRadarDisplay() {
     try {
-        // Fetch with a direct cache-busting timestamp to stop browsers from caching 404/CORS states
+        // FIXED: Uses the absolute URL to ensure Vercel routes internal fetch tokens correctly
+        const targetUrl = `https://24rackadar.vercel.app/api/map-state?t=${Date.now()}`;
+        const response = await fetch(targetUrl);
         
-        const targetUrl = `/api/map-state?t=${Date.now()}`;
-        
-        // If server responds with 404 or fails, stop processing before JSON crashes script
         if (!response.ok) {
-            console.warn(`Backend pipeline status: ${response.status} - Waiting for data...`);
+            console.warn(`Backend pipeline status: ${response.status}`);
             return;
         }
 
-        const data = await response.json();
-        
-        // Safety Guard: Verify incoming payload object structure exists
-        if (!data) return;
+        const mapData = await response.json();
+        if (!mapData) return;
 
-        // Safely wipe dynamic aircraft entries each frame step
         planesGroup.clearLayers();
         pathsGroup.clearLayers();
 
-        // 5. Parse Static Airfield Geometry Markers
-        if (!airportsLoaded && data.airports) {
-            try {
-                for (const [icao, coord] of Object.entries(data.airports)) {
-                    if (!coord || coord.x === undefined || coord.y === undefined) continue;
+        // Airports Rendering
+        if (!airportsLoaded && mapData.airports) {
+            for (const [icao, coord] of Object.entries(mapData.airports)) {
+                if (!coord || coord.x === undefined || coord.y === undefined) continue;
 
-                    L.rectangle([[coord.y - 140, coord.x - 140], [coord.y + 140, coord.x + 140]], {
-                        color: '#38bdf8',
-                        fillColor: '#0f172a',
-                        fillOpacity: 0.75,
-                        weight: 2,
-                        dashArray: '4, 4'
-                    }).addTo(airportsGroup);
+                L.rectangle([[coord.y - 140, coord.x - 140], [coord.y + 140, coord.x + 140]], {
+                    color: '#38bdf8',
+                    fillColor: '#0f172a',
+                    fillOpacity: 0.6,
+                    weight: 2,
+                    dashArray: '4, 4'
+                }).addTo(airportsGroup);
 
-                    L.marker([coord.y, coord.x], { opacity: 0 })
-                      .bindTooltip(`✈️ ${icao} [${coord.name || 'UNKN'}]`, { 
-                          permanent: true, 
-                          direction: 'center', 
-                          className: 'airport-overlay-label' 
-                      }).addTo(airportsGroup);
-                }
-                airportsLoaded = true;
-            } catch (airportErr) {
-                console.error("Airport render skipped:", airportErr);
+                L.marker([coord.y, coord.x], { opacity: 0 })
+                  .bindTooltip(`✈️ ${icao} [${coord.name || 'UNKN'}]`, { 
+                      permanent: true, 
+                      direction: 'center', 
+                      className: 'airport-overlay-label' 
+                  }).addTo(airportsGroup);
             }
+            airportsLoaded = true;
         }
 
-        // 6. Map Dynamic Target Matrix Updates
-        if (data.planes && Array.isArray(data.planes)) {
-            data.planes.forEach(plane => {
-                // Safeguard against missing array item parameters
+        // Planes Rendering
+        if (mapData.planes && Array.isArray(mapData.planes)) {
+            mapData.planes.forEach(plane => {
                 if (!plane || plane.x === undefined || plane.y === undefined) return;
 
                 const position = [plane.y, plane.x];
@@ -144,7 +135,6 @@ async function refreshRadarDisplay() {
                     className: 'leaflet-transparent-tooltip'
                 });
 
-                // Double Click Tactical ATC Vector Routing Callout
                 liveMarker.on('dblclick', (event) => {
                     L.DomEvent.stopPropagation(event);
                     headingVectorGroup.clearLayers();
@@ -174,9 +164,8 @@ async function refreshRadarDisplay() {
 
                 planesGroup.addLayer(liveMarker);
 
-                // Draw dashed guiding strings to target fields
-                if (plane.closestAirport && plane.closestAirport !== "None" && data.airports && data.airports[plane.closestAirport]) {
-                    const fieldDest = data.airports[plane.closestAirport];
+                if (plane.closestAirport && plane.closestAirport !== "None" && mapData.airports && mapData.airports[plane.closestAirport]) {
+                    const fieldDest = mapData.airports[plane.closestAirport];
                     if (fieldDest.x !== undefined && fieldDest.y !== undefined) {
                         const routePathLine = L.polyline([position, [fieldDest.y, fieldDest.x]], {
                             color: activeThemeColor,
@@ -190,11 +179,9 @@ async function refreshRadarDisplay() {
             });
         }
     } catch (err) {
-        // Silently handles connection network drops without stopping layout loops
-        console.warn("Connection sync state waiting for backend pipeline...");
+        console.warn("Connection sync state waiting for backend pipeline...", err);
     }
 }
 
-// 7. Global Polling Loop Configuration
 setInterval(refreshRadarDisplay, 1000);
 refreshRadarDisplay();
