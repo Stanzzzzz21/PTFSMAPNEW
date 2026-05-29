@@ -58,7 +58,7 @@ async function refreshRadarDisplay() {
     try {
         // FIXED: Uses the absolute URL to ensure Vercel routes internal fetch tokens correctly
         const targetUrl = `https://24rackadar.vercel.app/api/map-state?t=${Date.now()}`;
-        const response = await fetch(targetUrl);
+        const targetUrl = `/api/map-state?t=${Date.now()}`;
         
         if (!response.ok) {
             console.warn(`Backend pipeline status: ${response.status}`);
