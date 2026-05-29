@@ -7,12 +7,36 @@ const map = L.map('map', {
     attributionControl: false
 });
 
+const gridGroup = L.layerGroup().addTo(map); // NEW: Dedicated tactical grid layer
 const airportsGroup = L.layerGroup().addTo(map);
 const pathsGroup = L.layerGroup().addTo(map);
 const headingVectorGroup = L.layerGroup().addTo(map);
 const planesGroup = L.layerGroup().addTo(map);
 
 let airportsLoaded = false;
+
+// NEW: Draw a high-tech tracking grid layout directly onto the empty blue space
+function drawRadarGrid() {
+    gridGroup.clearLayers();
+    const gridSpacing = 500;
+    const gridRange = 10000;
+
+    for (let x = -gridRange; x <= gridRange; x += gridSpacing) {
+        L.polyline([[ -gridRange, x ], [ gridRange, x ]], {
+            color: '#1e293b',
+            weight: 0.5,
+            opacity: 0.4
+        }).addTo(gridGroup);
+    }
+    for (let y = -gridRange; y <= gridRange; y += gridSpacing) {
+        L.polyline([[ y, -gridRange ], [ y, gridRange ]], {
+            color: '#1e293b',
+            weight: 0.5,
+            opacity: 0.4
+        }).addTo(gridGroup);
+    }
+}
+drawRadarGrid();
 
 function getAircraftHeading(plane) {
     if (plane.heading !== undefined) return parseInt(plane.heading);
@@ -31,10 +55,10 @@ async function refreshRadarDisplay() {
         if (!airportsLoaded && data.airports) {
             for (const [icao, coord] of Object.entries(data.airports)) {
                 L.rectangle([[coord.y - 140, coord.x - 140], [coord.y + 140, coord.x + 140]], {
-                    color: '#1e293b',
+                    color: '#38bdf8',
                     fillColor: '#0f172a',
-                    fillOpacity: 0.5,
-                    weight: 1.5,
+                    fillOpacity: 0.75,
+                    weight: 2,
                     dashArray: '4, 4'
                 }).addTo(airportsGroup);
 
@@ -91,7 +115,7 @@ async function refreshRadarDisplay() {
                     headingVectorGroup.clearLayers();
 
                     const angularRadians = (headingAngle - 90) * (Math.PI / 180);
-                    const vectorExtensionLength = 2000; 
+                    const vectorExtensionLength = 3000; 
                     
                     const targetX = plane.x + Math.cos(angularRadians) * vectorExtensionLength;
                     const targetY = plane.y - Math.sin(angularRadians) * vectorExtensionLength;
