@@ -1,0 +1,58 @@
+html, body, #map {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100vh;
+    background-color: #0b0f19;
+    font-family: 'Courier New', monospace;
+    overflow: hidden;
+}
+.airport-overlay-label {
+    background: rgba(15, 23, 42, 0.9) !important;
+    border: 1px solid #38bdf8 !important;
+    color: #38bdf8 !important;
+    font-weight: bold !important;
+    font-size: 11px !important;
+    padding: 3px 6px !important;
+    border-radius: 4px !important;
+}
+.atc-data-tag {
+    background: rgba(11, 15, 25, 0.95) !important;
+    border: 1px solid #2dd4bf !important;
+    border-radius: 4px !important;
+    padding: 6px 10px !important;
+    font-size: 11px !important;
+    color: #cbd5e1;
+    line-height: 1.4;
+}
+.atc-data-tag.emergency-mode {
+    border-color: #ef4444 !important;
+    color: #fca5a5;
+    animation: atc-emergency-pulse 1s infinite alternate;
+}
+.plane-icon-wrapper {
+    transition: transform 0.25s linear;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+.leaflet-popup-content-wrapper {
+    background: #0f172a !important;
+    color: #ffffff !important;
+    border: 1px solid #e11d48 !important;
+    border-radius: 6px !important;
+    font-family: 'Courier New', monospace !important;
+}
+.leaflet-popup-tip {
+    background: #e11d48 !important;
+}
+.leaflet-transparent-tooltip {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+}
+@keyframes atc-emergency-pulse {
+    from { box-shadow: 0 0 4px #ef4444; }
+    to { box-shadow: 0 0 16px rgba(239, 68, 68, 0.6); }
+}
