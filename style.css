@@ -1,21 +1,23 @@
-/* Reset defaults and prevent browser scrollbars */
+/* Core viewport layout reset */
 html, body {
     margin: 0;
     padding: 0;
     width: 100%;
     height: 100%;
-    background-color: #0b0f19; /* Dark radar background color */
+    background-color: #0b0f19;
     overflow: hidden;
 }
 
-/* Force the map container to take up 100% of the visible screen space */
+/* Force container layout metrics visible */
 #map {
     position: absolute;
     top: 0;
     bottom: 0;
-    width: 100%;
-    height: 100%;
-    background-color: #0b0f19 !important; /* Force map void color to match body */
+    left: 0;
+    right: 0;
+    width: 100% !important;
+    height: 100% !important;
+    background-color: #0b0f19 !important;
 }
 
 /* Permanent Floating Airport Label Overlays */
@@ -28,6 +30,7 @@ html, body {
     padding: 3px 6px !important;
     border-radius: 4px !important;
     font-family: 'Courier New', monospace !important;
+    white-space: nowrap;
 }
 
 /* Tactical Data Block Container for Aircraft Tags */
@@ -40,6 +43,7 @@ html, body {
     color: #cbd5e1;
     font-family: 'Courier New', monospace !important;
     line-height: 1.4;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
 }
 
 /* Emergency State Trigger for Tags */
@@ -55,6 +59,8 @@ html, body {
     display: flex;
     justify-content: center;
     align-items: center;
+    width: 26px;
+    height: 26px;
 }
 
 /* Custom Intercept Control Box Leaflet Overrides */
