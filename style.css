@@ -7,6 +7,23 @@ html, body {
     background-color: #0b0f19;
     overflow: hidden;
 }
+.leaflet-transparent-tooltip {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    white-space: nowrap;
+}
+.leaflet-transparent-tooltip::before {
+    border: none !important;
+}
+.airport-overlay-label {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+.airport-overlay-label::before {
+    border: none !important;
+}
 
 /* Force container layout metrics visible */
 #map {
