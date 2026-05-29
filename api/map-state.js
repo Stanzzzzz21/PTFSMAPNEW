@@ -1,5 +1,5 @@
 // api/map-state.js
-import WebSocket from 'ws';
+const WebSocket = require('ws');
 
 // --- COMPLETE PTFS / ATC24 MAP AIRFIELD DATA ---
 const AIRPORTS = {
@@ -25,7 +25,7 @@ const AIRPORTS = {
     "CVN78": { name: "USS Gerald R. Ford", x: 28000, y: -40000 }
 };
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
     // Set headers to allow cross-origin fetching securely
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET');
@@ -71,7 +71,7 @@ export default async function handler(req, res) {
         // Fallback grid configuration if the upstream socket network times out
         res.status(500).json({ airports: AIRPORTS, planes: [], error: error.message });
     }
-}
+};
 
 // Opens a rapid fetch connection to resolve a single data frame instantly
 function fetchLatestDataGridFrame() {
@@ -95,7 +95,7 @@ function fetchLatestDataGridFrame() {
                     resolve(packet.d);
                 }
             } catch (err) {
-                // Ignore parse errors, wait for the next message string
+                // Ignore parse errors, wait for next frame
             }
         });
 
