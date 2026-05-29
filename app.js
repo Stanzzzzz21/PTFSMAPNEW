@@ -58,7 +58,7 @@ async function refreshRadarDisplay() {
     try {
         // Fetch with a direct cache-busting timestamp to stop browsers from caching 404/CORS states
         const targetUrl = `https://ptfs-backend.onrender.com/api/map-state?t=${Date.now()}`;
-        const response = await fetch(targetUrl);
+        const targetUrl = `/api/map-state?t=${Date.now()}`;
         
         // If server responds with 404 or fails, stop processing before JSON crashes script
         if (!response.ok) {
