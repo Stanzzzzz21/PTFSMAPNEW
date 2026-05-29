@@ -1,14 +1,13 @@
 /**
- * PTFS Tactical Radar Layout Engine - Complete Map Scaling Edition
- * Auto-Centered & Direct Payload Processing
+ * PTFS Tactical Radar Layout Engine - Pure ATC 24 Grid Spec
+ * Client-Side Inversion Matrix & Data Normalizer
  */
 
-// FIXED: Adjust minZoom and initial zoom metrics so the entire 50,000+ grid fits on a single screen
 const map = L.map('map', {
     crs: L.CRS.Simple,
-    minZoom: -8,
-    maxZoom: 3,
-    zoom: -5, 
+    minZoom: -6,
+    maxZoom: 2,
+    zoom: -4, 
     center: [0, 0],
     attributionControl: false
 });
@@ -21,7 +20,7 @@ const planesGroup = L.layerGroup().addTo(map);
 
 let airportsLoaded = false;
 
-// --- COMPLETE PTFS / ATC24 MAP AIRFIELD DATA ---
+// Real Target Coordinates Map Table
 const AIRPORTS = {
     "IRFD": { name: "Greater Rockford", x: -24500, y: 18000 },
     "IPPH": { name: "Perth International", x: 22000, y: -14500 },
@@ -47,18 +46,17 @@ const AIRPORTS = {
 
 function drawRadarGrid() {
     gridGroup.clearLayers();
-    const gridSpacing = 5000; // Scaled up spacing to match macro coordinate bounds
+    const gridSpacing = 5000;
     const gridRange = 60000;
 
-    // Macro Tactical Airspace Ranges
-    L.circle([0, 0], { radius: 40000, color: '#1e293b', weight: 1, fill: false }).addTo(gridGroup);
-    L.circle([0, 0], { radius: 20000, color: '#1e293b', weight: 1, fill: false }).addTo(gridGroup);
+    L.circle([0, 0], { radius: 30000, color: '#1e293b', weight: 1, fill: false }).addTo(gridGroup);
+    L.circle([0, 0], { radius: 15000, color: '#1e293b', weight: 1, fill: false }).addTo(gridGroup);
 
     for (let x = -gridRange; x <= gridRange; x += gridSpacing) {
-        L.polyline([[ -gridRange, x ], [ gridRange, x ]], { color: '#1e293b', weight: 0.5, opacity: 0.15 }).addTo(gridGroup);
+        L.polyline([[ -gridRange, x ], [ gridRange, x ]], { color: '#141b24', weight: 0.5 }).addTo(gridGroup);
     }
     for (let y = -gridRange; y <= gridRange; y += gridSpacing) {
-        L.polyline([[ y, -gridRange ], [ y, gridRange ]], { color: '#1e293b', weight: 0.5, opacity: 0.15 }).addTo(gridGroup);
+        L.polyline([[ y, -gridRange ], [ y, gridRange ]], { color: '#141b24', weight: 0.5 }).addTo(gridGroup);
     }
 }
 drawRadarGrid();
@@ -66,21 +64,23 @@ drawRadarGrid();
 function loadAirports() {
     if (airportsLoaded) return;
     for (const [icao, coord] of Object.entries(AIRPORTS)) {
-        // Size layout boxes properly for macro view tracking scales
-        L.rectangle([[coord.y - 600, coord.x - 600], [coord.y + 600, coord.x + 600]], {
+        // FIXED: Flip the Y calculation parameter here (-coord.y) to cancel out the map inversion bug
+        const latY = -coord.y;
+        const lngX = coord.x;
+
+        L.rectangle([[latY - 500, lngX - 500], [latY + 500, lngX + 500]], {
             color: '#38bdf8',
             fillColor: '#0f172a',
-            fillOpacity: 0.6,
+            fillOpacity: 0.4,
             weight: 1.5,
-            dashArray: '4, 4'
+            dashArray: '3, 6'
         }).addTo(airportsGroup);
 
-        L.marker([coord.y, coord.x], { opacity: 0 })
-          .bindTooltip(`✈️ ${icao}`, { 
+        L.marker([latY, lngX], { opacity: 0 })
+          .bindTooltip(`<span style="color:#eab308; font-weight:bold; font-family:monospace;">${icao}</span>`, { 
               permanent: true, 
-              direction: 'top', 
-              className: 'airport-overlay-label',
-              offset: [0, -10]
+              direction: 'center', 
+              className: 'airport-overlay-label'
           }).addTo(airportsGroup);
     }
     airportsLoaded = true;
@@ -89,29 +89,27 @@ loadAirports();
 
 async function refreshRadarDisplay() {
     try {
-        const response = await fetch(`https://24data.ptfs.app/api/map-state?t=${Date.now()}`);
+        // FIXED: Using a public CORS proxy engine to pull the data directly without a browser origin failure
+        const endpoint = 'https://24data.ptfs.app/api/map-state';
+        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(endpoint)}&t=${Date.now()}`;
+        
+        const response = await fetch(proxyUrl);
         if (!response.ok) return;
         
-        const rawData = await response.json();
+        const wrapperData = await response.json();
+        const rawData = JSON.parse(wrapperData.contents);
         
-        // FIXED: Maps tracking matrix seamlessly across alternative feed schemas (.d or .planes)
-        let liveAircraft = {};
-        if (rawData.d) liveAircraft = rawData.d;
-        else if (rawData.planes) liveAircraft = rawData.planes;
-        else if (typeof rawData === 'object') liveAircraft = rawData;
+        const liveAircraft = rawData.planes || rawData.d || rawData || {};
 
         planesGroup.clearLayers();
         pathsGroup.clearLayers();
 
-        let planeCount = 0;
-
         Object.entries(liveAircraft).forEach(([callsign, data]) => {
             if (!data || !data.position) return;
-            
-            planeCount++;
 
+            // FIXED: Apply the exact same Y inversion conversion to aircraft updates
             const currentX = data.position.x;
-            const currentY = data.position.y;
+            const currentY = -data.position.y;
             const position = [currentY, currentX];
             
             const headingAngle = parseInt(data.heading) || 0;
@@ -121,9 +119,10 @@ async function refreshRadarDisplay() {
             let closestAirport = "None";
             let minDistance = Infinity;
 
+            // Run alignment checks
             for (const [icao, coord] of Object.entries(AIRPORTS)) {
                 const dx = currentX - coord.x;
-                const dy = currentY - coord.y;
+                const dy = (-currentY) - coord.y; // Match real base values
                 const dist = Math.sqrt(dx * dx + dy * dy); 
                 if (dist < minDistance) {
                     minDistance = dist;
@@ -132,24 +131,26 @@ async function refreshRadarDisplay() {
             }
 
             const hudTagTemplate = `
-                <div class="atc-data-tag ${isEmergency ? 'emergency-mode' : ''}">
-                    <b style="color:${activeThemeColor}; font-size:11px;">${callsign || 'N/A'}</b><br>
-                    <span style="color:#64748b;">ALT:</span> <b style="color:#f1f5f9;">${data.altitude || 0}FT</b><br>
-                    <span style="color:#64748b;">SPD:</span> <b style="color:#f1f5f9;">${data.groundSpeed ? Math.round(data.groundSpeed) : 0}KT</b>
+                <div class="atc-data-tag" style="font-family: monospace; line-height: 1.2;">
+                    <b style="color:${activeThemeColor}; font-size:12px;">${callsign}</b><br>
+                    <span style="color:#a1a1aa;">${data.aircraftType || data.aircraft || 'UNK'}</span><br>
+                    <span>ALT: ${(data.altitude || 0)}</span><br>
+                    <span>SPD: ${data.groundSpeed ? Math.round(data.groundSpeed) : 0}</span>
                 </div>
             `;
 
+            // Plain text track target template block matching your screenshot
             const planeSvgIcon = L.divIcon({
                 html: `
                     <div class="plane-icon-wrapper" style="transform: rotate(${headingAngle}deg);">
-                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                             <path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z" 
-                                  fill="${activeThemeColor}" stroke="#0b0f19" stroke-width="1"/>
+                                  fill="${activeThemeColor}" stroke="#000" stroke-width="1"/>
                         </svg>
                     </div>`,
                 className: '',
-                iconSize: [22, 22],
-                iconAnchor: [11, 11]
+                iconSize: [20, 20],
+                iconAnchor: [10, 10]
             });
 
             const liveMarker = L.marker(position, { icon: planeSvgIcon });
@@ -157,56 +158,28 @@ async function refreshRadarDisplay() {
             liveMarker.bindTooltip(hudTagTemplate, {
                 permanent: true,
                 direction: 'right',
-                offset: [12, 0],
+                offset: [10, 0],
                 className: 'leaflet-transparent-tooltip'
-            });
-
-            liveMarker.on('dblclick', (event) => {
-                L.DomEvent.stopPropagation(event);
-                headingVectorGroup.clearLayers();
-
-                const angularRadians = (headingAngle - 90) * (Math.PI / 180);
-                const vectorExtensionLength = 12000; 
-                
-                const targetX = currentX + Math.cos(angularRadians) * vectorExtensionLength;
-                const targetY = currentY - Math.sin(angularRadians) * vectorExtensionLength;
-
-                const interceptVectorTrack = L.polyline([position, [targetY, targetX]], {
-                    color: '#e11d48',
-                    weight: 2,
-                    dashArray: '5, 8',
-                    opacity: 0.9
-                }).addTo(headingVectorGroup);
-
-                interceptVectorTrack.bindPopup(`
-                    <div style="padding: 4px; font-family: monospace;">
-                        <b style="color:#e11d48; font-size:11px;">INTERCEPT TARGET</b><br>
-                        ID: <b style="color:#fff;">${callsign || 'UNK'}</b><br>
-                        TRK: <b style="color:#2dd4bf;">${String(headingAngle).padStart(3, '0')}°</b>
-                    </div>
-                `).openOn(map);
             });
 
             planesGroup.addLayer(liveMarker);
 
+            // Draw track line back to the target runway hub
             if (closestAirport !== "None" && AIRPORTS[closestAirport]) {
                 const fieldDest = AIRPORTS[closestAirport];
-                const routePathLine = L.polyline([position, [fieldDest.y, fieldDest.x]], {
+                const routePathLine = L.polyline([position, [-fieldDest.y, fieldDest.x]], {
                     color: activeThemeColor,
                     weight: 1,
-                    dashArray: '1, 6',
-                    opacity: 0.18
+                    dashArray: '2, 6',
+                    opacity: 0.2
                 });
                 pathsGroup.addLayer(routePathLine);
             }
         });
-
-        console.log(`Radar Console Sync Active: ${planeCount} tracking nodes painted.`);
     } catch (err) {
-        console.warn("Awaiting stream response context...", err);
+        console.warn("Sync pipeline loop waiting...", err);
     }
 }
 
-// 2-second radar sweeping intervals
-setInterval(refreshRadarDisplay, 2000);
+setInterval(refreshRadarDisplay, 2500);
 refreshRadarDisplay();
